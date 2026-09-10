@@ -20,9 +20,9 @@
     .mode-tabs{display:flex;gap:8px;overflow:auto;margin-bottom:14px}.mode-tabs button,.btn{border:0;border-radius:12px;padding:11px 14px;background:var(--soft);font-size:14px;font-weight:700}.mode-tabs button.active,.btn.primary{background:var(--accent);color:#fff}
     .flash{min-height:280px;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;user-select:none}.word{font-size:46px;font-weight:850;letter-spacing:.5px}.reading{font-size:20px;color:var(--muted);margin-top:8px}.meaning{font-size:24px;font-weight:750}.example{margin-top:18px;color:var(--muted);line-height:1.55}.hint{font-size:13px;color:#aaa;margin-top:22px}
     .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.btn.good{background:#e8f6ee;color:var(--good)}.btn.bad{background:#fdecec;color:var(--bad)}
-    .quiz-q{font-size:34px;font-weight:850;text-align:center;margin:14px 0 24px}.choices{display:grid;gap:10px}.choice{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;padding:14px;font-size:16px}.choice.correct{border-color:#7ac99b;background:#edf9f2}.choice.wrong{border-color:#e3a19b;background:#fff0ee}
+    .quiz-q{font-size:34px;font-weight:850;text-align:center;margin:14px 0 8px}.quiz-reading{font-size:18px;color:var(--muted);text-align:center;min-height:24px;margin-bottom:22px}.choices{display:grid;gap:10px}.choice{width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:14px;padding:14px;font-size:16px}.choice.correct{border-color:#7ac99b;background:#edf9f2}.choice.wrong{border-color:#e3a19b;background:#fff0ee}
     .section-title{font-size:18px;font-weight:800;margin-bottom:12px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}input,textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;background:#fff}textarea{min-height:80px;resize:vertical}.full{grid-column:1/-1}.small{font-size:12px;color:var(--muted)}
-    .list{display:grid;gap:9px}.item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:13px}.item .main b{display:block}.item .main span{font-size:13px;color:var(--muted)}.iconbtn{border:0;background:#f2f2f4;border-radius:10px;padding:8px 10px}
+    .list{display:grid;gap:9px}.item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:13px}.item .main b{display:block}.item-reading{font-size:14px;color:var(--muted);margin:3px 0 4px}.item .main span{font-size:13px;color:var(--muted)}.iconbtn{border:0;background:#f2f2f4;border-radius:10px;padding:8px 10px}
     nav{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:flex;justify-content:center;z-index:10}nav .bar{max-width:620px;width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}nav button{border:0;background:transparent;border-radius:12px;padding:10px 6px;font-weight:700;color:#777}nav button.active{background:#111;color:#fff}
     .hidden{display:none!important}.empty{text-align:center;color:var(--muted);padding:30px 0}
   </style>
@@ -76,6 +76,7 @@
       </div>
       <div class="small" id="quizProgress"></div>
       <div class="quiz-q" id="quizWord">—</div>
+      <div class="quiz-reading" id="quizReading"></div>
       <div class="choices" id="choices"></div>
       <button class="btn primary" id="nextQuiz" style="margin-top:14px;width:100%">下一題</button>
     </div>
@@ -235,6 +236,69 @@ function exampleFor(x){
   }
   return ex;
 }
+// v13：只要單字含有漢字，就在下一行顯示完整讀音；
+// 原本就是片假名的部分保留片假名，只把漢字部分換成平假名。
+// 例如：東京スカイツリー → とうきょうスカイツリー、テレビ局 → テレビきょく。
+function hasKanji(s=''){
+  return /[\u3400-\u4DBF\u4E00-\u9FFF々〆ヵヶ]/.test(String(s));
+}
+function toHiragana(s=''){
+  return String(s).replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0x60));
+}
+function kanaForMatch(s=''){
+  return toHiragana(String(s)).replace(/\s+/g,'');
+}
+function fullHiraganaReading(x){
+  if(!x||!hasKanji(x.w))return '';
+  const surface=String(x.w||'').replace(/＝/g,'');
+  let remaining=kanaForMatch(x.r||'');
+  const chars=[...surface];
+  const typeOf=c=>/[\u3400-\u4DBF\u4E00-\u9FFF々〆ヵヶ]/.test(c)?'K':(/[ぁ-ゖァ-ヶー～]/.test(c)?'A':'O');
+  const tokens=[];
+  for(const c of chars){
+    const t=typeOf(c);
+    if(tokens.length && tokens[tokens.length-1].type===t) tokens[tokens.length-1].text+=c;
+    else tokens.push({type:t,text:c});
+  }
+  let out='';
+  for(let i=0;i<tokens.length;i++){
+    const tok=tokens[i];
+    if(tok.type==='O'){
+      out+=tok.text;
+      continue;
+    }
+    if(tok.type==='A'){
+      // 單字表面原本的平假名／片假名照原樣顯示。
+      out+=tok.text;
+      const anchor=kanaForMatch(tok.text);
+      if(anchor && remaining.startsWith(anchor)) remaining=remaining.slice(anchor.length);
+      continue;
+    }
+    // 漢字區段：用下一個假名區段當錨點，從讀音欄切出這段漢字的平假名。
+    let nextAnchor='';
+    for(let j=i+1;j<tokens.length;j++){
+      if(tokens[j].type==='A'){
+        nextAnchor=kanaForMatch(tokens[j].text);
+        if(nextAnchor)break;
+      }
+    }
+    if(nextAnchor){
+      const pos=remaining.indexOf(nextAnchor);
+      if(pos>=0){
+        out+=remaining.slice(0,pos);
+        remaining=remaining.slice(pos);
+      }else{
+        // 部分原始資料只記錄漢字讀音；此時直接使用目前剩餘讀音。
+        out+=remaining;
+        remaining='';
+      }
+    }else{
+      out+=remaining;
+      remaining='';
+    }
+  }
+  return out;
+}
 function showCard(){
   const arr=getDeck();
   $('againBtn').textContent=deck==='mastered'?'重新學習':'還不會';
@@ -248,7 +312,8 @@ function showCard(){
   currentIndex=((currentIndex%arr.length)+arr.length)%arr.length;
   const x=arr[currentIndex]; revealed=false;
   $('fcWord').textContent=x.w;
-  $('fcReading').textContent=(x.r||'')+(x.level?` · ${x.level}`:'');
+  const fullReading=fullHiraganaReading(x);
+  $('fcReading').textContent=fullReading?`${fullReading}${x.level?` · ${x.level}`:''}`:(x.level||'');
   $('fcMeaning').textContent=x.m;
   $('fcMeaning').classList.add('hidden');$('fcHint').textContent='點一下翻卡';
 }
@@ -285,7 +350,7 @@ $('addWordBtn').onclick=()=>{const w=$('wordInput').value.trim(),r=$('readingInp
 $('bulkBtn').onclick=()=>{const lines=$('bulkInput').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);let n=0;lines.forEach(line=>{const [w,r,m,e='']=line.split(/[｜|]/).map(x=>x.trim());if(w&&m){words.push({w,r,m,e,level:'自訂',source:'自訂',score:0,wrong:0,next:0,mastered:false});n++;}});save();$('bulkInput').value='';showCard();alert(`已加入 ${n} 個單字`);}
 function renderList(){
   const q=$('searchInput').value.trim().toLowerCase();const arr=words.filter(x=>(x.w+x.r+x.m).toLowerCase().includes(q));
-  $('wordList').innerHTML=arr.length?arr.map(x=>`<div class="item"><div class="main"><b>${esc(x.w)} <span>${esc(x.r||'')}</span></b><span>${esc(x.m)}${x.source?` · ${esc(x.source)} p.${x.page||''}`:''} · ${isMastered(x)?'✅ 已學會':'學習中'}</span></div><div style="display:flex;gap:6px"><button class="iconbtn" data-toggle="${words.indexOf(x)}">${isMastered(x)?'重新學習':'標記學會'}</button><button class="iconbtn" data-del="${words.indexOf(x)}">刪除</button></div></div>`).join(''):'<div class="empty">沒有找到單字</div>';
+  $('wordList').innerHTML=arr.length?arr.map(x=>{const rd=fullHiraganaReading(x);return `<div class="item"><div class="main"><b>${esc(x.w)}</b>${rd?`<div class="item-reading">${esc(rd)}</div>`:''}<span>${esc(x.m)}${x.source?` · ${esc(x.source)} p.${x.page||''}`:''} · ${isMastered(x)?'✅ 已學會':'學習中'}</span></div><div style="display:flex;gap:6px"><button class="iconbtn" data-toggle="${words.indexOf(x)}">${isMastered(x)?'重新學習':'標記學會'}</button><button class="iconbtn" data-del="${words.indexOf(x)}">刪除</button></div></div>`}).join(''):'<div class="empty">沒有找到單字</div>';
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const x=words[+b.dataset.toggle];x.mastered=!x.mastered;if(x.mastered){x.score=Math.max(1,x.score||0);x.wrong=0;x.next=Date.now()+86400000;}else{x.score=0;x.next=0;}save();renderList();showCard();});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{words.splice(+b.dataset.del,1);save();renderList();showCard();});
 }
@@ -307,13 +372,14 @@ function getQuizOptionPool(target){
 function startQuiz(){quizIndex=0;nextQuestion();}
 function nextQuestion(){
   const targets=getQuizTargets();
-  if(!targets.length){$('quizWord').textContent='完成 🎉';$('quizProgress').textContent=`${quizDeck==='all'?'全部':quizDeck}目前沒有尚未學會的單字`;$('choices').innerHTML='';return;}
+  if(!targets.length){$('quizWord').textContent='完成 🎉';$('quizReading').textContent='';$('quizProgress').textContent=`${quizDeck==='all'?'全部':quizDeck}目前沒有尚未學會的單字`;$('choices').innerHTML='';return;}
   quizAnswered=false;
   const target=targets[Math.floor(Math.random()*targets.length)];
   const pool=getQuizOptionPool(target).sort(()=>Math.random()-.5).slice(0,3);
-  if(pool.length<3){$('quizWord').textContent='單字數不足';$('quizProgress').textContent='此範圍至少需要 4 個單字才能進行四選一測驗';$('choices').innerHTML='';return;}
+  if(pool.length<3){$('quizWord').textContent='單字數不足';$('quizReading').textContent='';$('quizProgress').textContent='此範圍至少需要 4 個單字才能進行四選一測驗';$('choices').innerHTML='';return;}
   const opts=[target,...pool].sort(()=>Math.random()-.5);
-  $('quizWord').textContent=target.w+(target.r?`（${target.r}）`:'');
+  $('quizWord').textContent=target.w;
+  $('quizReading').textContent=fullHiraganaReading(target);
   $('quizProgress').textContent=`${quizDeck==='all'?'全部':quizDeck} · 第 ${quizIndex+1} 題 · 尚未學會 ${targets.length} 個`;
   $('choices').innerHTML=opts.map(x=>`<button class="choice" data-correct="${x===target}">${esc(x.m)}</button>`).join('');
   document.querySelectorAll('.choice').forEach(c=>c.onclick=()=>{

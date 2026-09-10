@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jlpt-vocab-app-v11-cat-icon';
+const CACHE_NAME = 'jlpt-vocab-app-v13-preserve-katakana';
 const APP_SHELL = [
   './',
   './index.html',

@@ -137,7 +137,7 @@ if(localStorage.getItem('vocab_data_version')!=='jlpt-examples-v5'){
     const k=`${x.w}::${x.source||''}`;
     if(!keys.has(k)){words.push({...x,mastered:false});keys.add(k);}
   });
-  localStorage.setItem('vocab_data_version','jlpt-progress-v2');
+  localStorage.setItem('vocab_data_version','jlpt-examples-v6');
   localStorage.setItem('vocab_words',JSON.stringify(words));
 }
 // 保險：新舊資料都補齊欄位
@@ -180,33 +180,51 @@ function firstMeaning(m=''){
 function exampleFor(x){
   if(x.e){
     const parts=String(x.e).split(/\s*｜\s*/);
-    return {jp:parts[0],zh:parts[1]||`這句例句使用了「${firstMeaning(x.m)}」的意思。`};
+    return {jp:parts[0],zh:parts[1]||'（此自訂例句尚未填寫中文翻譯）'};
   }
   const w=cleanHeadword(x.w), m=firstMeaning(x.m), lv=x.level||'N3';
-  // v4: JLPT 分級情境例句。以詞形與釋義選擇較自然的句型，避免上一版單純「X的意思是Y」。
-  if(/^～|～$/.test(w)||w.includes('～')) return {jp:`この表現を使って、自分の経験について一文書いてみましょう。`,zh:`請試著使用「${w}」寫一句和自己經驗有關的句子。`};
+  // v6：中文欄改為「日文例句的實際翻譯」，不再顯示程度／用法說明。
+  if(/^～|～$/.test(w)||w.includes('～')) return {
+    jp:`この表現を使って、自分の経験について一文書いてみましょう。`,
+    zh:`試著使用這個表達方式，寫一句關於自己經驗的句子吧。`
+  };
   const bare=w.replace(/[（(].*?[）)]/g,'').replace(/（する）|\(する\)/g,'').trim();
   const isSuru=/（する）|\(する\)|する$/.test(x.w);
   const isI=/い$/.test(bare) && !/(會い|違い|場合)$/.test(bare);
   const isVerb=isSuru||/(る|う|く|ぐ|す|つ|ぬ|ぶ|む)$/.test(bare);
   const contexts={
-    N4:{n:`毎日の生活で「${bare}」をよく使います。`,v:`今日は「${bare}」ことにしました。`,a:`この場所はとても${bare}です。`},
-    N3:{n:`最近、「${bare}」について友達と話しました。`,v:`時間があれば、もう一度${bare}ようと思います。`,a:`思っていたより${bare}ので、少し驚きました。`},
-    N2:{n:`この問題を考えるうえで、「${bare}」は重要なポイントです。`,v:`狀況をよく確認してから${bare}必要があります。`,a:`予想以上に${bare}ため、計畫を見直すことにしました。`},
-    N1:{n:`議論を深めるためには、「${bare}」という観點も無視できません。`,v:`長期的な影響まで考慮したうえで${bare}ことが求められます。`,a:`一見すると${bare}ように思えるが、背景には複雑な事情がある。`}
+    N4:{
+      n:{jp:`毎日の生活で「${bare}」をよく使います。`,zh:`在日常生活中，我經常使用「${bare}」。`},
+      v:{jp:`今日は「${bare}」ことにしました。`,zh:`今天我決定要「${m}」。`},
+      a:{jp:`この場所はとても${bare}です。`,zh:`這個地方非常${m}。`}
+    },
+    N3:{
+      n:{jp:`最近、「${bare}」について友達と話しました。`,zh:`最近，我和朋友聊了關於「${bare}」的事。`},
+      v:{jp:`時間があれば、もう一度${bare}ようと思います。`,zh:`如果有時間，我想再${m}一次。`},
+      a:{jp:`思っていたより${bare}ので、少し驚きました。`,zh:`因為比想像中還要${m}，所以我有點驚訝。`}
+    },
+    N2:{
+      n:{jp:`この問題を考えるうえで、「${bare}」は重要なポイントです。`,zh:`在思考這個問題時，「${bare}」是很重要的一點。`},
+      v:{jp:`狀況をよく確認してから${bare}必要があります。`,zh:`有必要先仔細確認狀況後再${m}。`},
+      a:{jp:`予想以上に${bare}ため、計畫を見直すことにしました。`,zh:`因為比預期還要${m}，所以決定重新檢討計畫。`}
+    },
+    N1:{
+      n:{jp:`議論を深めるためには、「${bare}」という観點も無視できません。`,zh:`為了深入討論，也不能忽視「${bare}」這個觀點。`},
+      v:{jp:`長期的な影響まで考慮したうえで${bare}ことが求められます。`,zh:`必須在連長期影響都納入考量後再${m}。`},
+      a:{jp:`一見すると${bare}ように思えるが、背景には複雑な事情がある。`,zh:`乍看之下似乎${m}，但背後有著複雜的情況。`}
+    }
   };
   const c=contexts[lv]||contexts.N3;
-  let jp=isI?c.a:(isVerb?c.v:c.n);
-  // 常見する動詞使用完整詞形，讓句子更自然。
+  let ex=isI?c.a:(isVerb?c.v:c.n);
+  // 常見「する」動詞使用完整詞形，並同步提供真正對應的中文翻譯。
   if(isSuru){
     const stem=bare.replace(/する$/,'');
-    jp=lv==='N4'?`今日は${stem}します。`:
-       lv==='N3'?`必要なら、もう一度${stem}しようと思います。`:
-       lv==='N2'?`十分に確認してから${stem}する必要があります。`:
-       `狀況を慎重に見極めたうえで${stem}することが求められます。`;
+    ex=lv==='N4'?{jp:`今日は${stem}します。`,zh:`今天要${m}。`}:
+       lv==='N3'?{jp:`必要なら、もう一度${stem}しようと思います。`,zh:`如果有需要，我想再${m}一次。`}:
+       lv==='N2'?{jp:`十分に確認してから${stem}する必要があります。`,zh:`有必要充分確認後再${m}。`}:
+       {jp:`狀況を慎重に見極めたうえで${stem}することが求められます。`,zh:`必須在慎重判斷狀況後再${m}。`};
   }
-  const zhMap={N4:`這是使用「${bare}（${m}）」的簡單生活例句。`,N3:`這句用「${bare}（${m}）」表達日常情境。`,N2:`這句以 N2 程度的語境使用「${bare}（${m}）」。`,N1:`這句以較正式的 N1 語境使用「${bare}（${m}）」。`};
-  return {jp,zh:zhMap[lv]||zhMap.N3};
+  return ex;
 }
 function showCard(){
   const arr=getDeck();

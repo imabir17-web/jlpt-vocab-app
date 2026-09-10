@@ -54,7 +54,6 @@
           <div class="word" id="fcWord">—</div>
           <div class="reading" id="fcReading"></div>
           <div class="meaning hidden" id="fcMeaning"></div>
-          <div class="example hidden" id="fcExample"></div>
           <div class="hint" id="fcHint">點一下翻卡</div>
         </div>
       </div>
@@ -125,22 +124,32 @@ const n1Seed=[{"w":"祭典","r":"さいてん","m":"慶典","e":"","source":"TRY
 const n3Tagged=n3Seed.map(x=>({...x,level:'N3'}));
 const seed=[...n4Seed,...n3Tagged,...n2Seed,...n1Seed];
 let words=JSON.parse(localStorage.getItem('vocab_words')||'null')||seed;
-// v2：已學會的單字不再出現在一般學習/測驗；保留舊版學習進度
-if(localStorage.getItem('vocab_data_version')!=='jlpt-examples-v5'){
-  words=words.map(x=>({
+// v10：內建單字的中文解釋統一以繁體版 seed 為準，同時保留既有學習進度。
+// 這一步也會修正手機 localStorage 中先前保存的簡體中文答案。
+const seedByExactKey=new Map(seed.map(x=>[`${x.w}::${x.source||''}`,x]));
+const seedByFallbackKey=new Map(seed.map(x=>[`${x.source||''}::${x.page||''}::${x.r||''}`,x]));
+words=words.map(x=>{
+  const exact=seedByExactKey.get(`${x.w}::${x.source||''}`);
+  const fallback=seedByFallbackKey.get(`${x.source||''}::${x.page||''}::${x.r||''}`);
+  const fresh=exact||fallback;
+  return {
     ...x,
-    level:x.level||(x.source&&x.source.includes('N3')?'N3':'自訂'),
-    mastered: typeof x.mastered==='boolean' ? x.mastered : ((x.score||0)>0)
-  }));
-  const keys=new Set(words.map(x=>`${x.w}::${x.source||''}`));
-  seed.forEach(x=>{
-    const k=`${x.w}::${x.source||''}`;
-    if(!keys.has(k)){words.push({...x,mastered:false});keys.add(k);}
-  });
-  localStorage.setItem('vocab_data_version','jlpt-examples-v6');
+    m:fresh?fresh.m:x.m,
+    level:x.level||(fresh&&fresh.level)||(x.source&&x.source.includes('N3')?'N3':'自訂'),
+    mastered:typeof x.mastered==='boolean'?x.mastered:((x.score||0)>0),
+    wrong:x.wrong||0,score:x.score||0,next:x.next||0
+  };
+});
+const existingKeys=new Set(words.map(x=>`${x.w}::${x.source||''}`));
+seed.forEach(x=>{
+  const k=`${x.w}::${x.source||''}`;
+  if(!existingKeys.has(k)){words.push({...x,mastered:false});existingKeys.add(k);}
+});
+if(localStorage.getItem('vocab_data_version')!=='jlpt-traditional-v10'){
+  localStorage.setItem('vocab_data_version','jlpt-traditional-v10');
   localStorage.setItem('vocab_words',JSON.stringify(words));
 }
-// 保險：新舊資料都補齊欄位
+// 每次載入都確保目前畫面使用最新版繁體解釋。
 words=words.map(x=>({...x,mastered:!!x.mastered,wrong:x.wrong||0,score:x.score||0,next:x.next||0}));
 let deck='all', quizDeck='all', currentIndex=0, revealed=false, quizIndex=0, quizAnswered=false;
 const $=id=>document.getElementById(id);
@@ -234,18 +243,16 @@ function showCard(){
   if(!arr.length){
     $('fcWord').textContent='完成 🎉';
     $('fcReading').textContent=deck==='mastered'?'目前還沒有已學會的單字':'目前沒有需要學習的單字';
-    $('fcMeaning').classList.add('hidden');$('fcExample').classList.add('hidden');$('fcHint').textContent='';return;
+    $('fcMeaning').classList.add('hidden');$('fcHint').textContent='';return;
   }
   currentIndex=((currentIndex%arr.length)+arr.length)%arr.length;
   const x=arr[currentIndex]; revealed=false;
   $('fcWord').textContent=x.w;
   $('fcReading').textContent=(x.r||'')+(x.level?` · ${x.level}`:'');
   $('fcMeaning').textContent=x.m;
-  const ex=exampleFor(x);
-  $('fcExample').innerHTML=`<div><b>例句：</b>${esc(ex.jp)}</div><div style="margin-top:8px;opacity:.78"><b>中文：</b>${esc(ex.zh)}</div>`;
-  $('fcMeaning').classList.add('hidden');$('fcExample').classList.add('hidden');$('fcHint').textContent='點一下翻卡';
+  $('fcMeaning').classList.add('hidden');$('fcHint').textContent='點一下翻卡';
 }
-$('flashcard').onclick=()=>{revealed=!revealed; $('fcMeaning').classList.toggle('hidden',!revealed); $('fcExample').classList.toggle('hidden',!revealed); $('fcHint').textContent=revealed?'再點一次可翻回正面':'點一下翻卡';}
+$('flashcard').onclick=()=>{revealed=!revealed; $('fcMeaning').classList.toggle('hidden',!revealed); $('fcHint').textContent=revealed?'再點一次可翻回正面':'點一下翻卡';}
 function findReal(x){return words.find(y=>y.w===x.w&&y.r===x.r&&(y.source||'')===(x.source||''));}
 function rate(known){
   const arr=getDeck(); if(!arr.length)return;

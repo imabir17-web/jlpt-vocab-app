@@ -248,6 +248,73 @@ function toHiragana(s=''){
 function kanaForMatch(s=''){
   return toHiragana(String(s)).replace(/\s+/g,'');
 }
+
+// v14：原始詞表若只用平假名書寫，但有明確、常用且不易混淆的漢字寫法，
+// 單字卡主標題優先顯示漢字；下一行仍保留原本的假名讀音。
+// 不強行套用罕見、古字或容易因語義而選錯的漢字寫法。
+const commonKanjiMap = {
+  // N3 常見
+  'うわさ':'噂','さびしい':'寂しい','あきらめる':'諦める','つらい':'辛い','くやしい':'悔しい',
+  'ひも':'紐','しっぽ':'尻尾','ふる':'振る','あわてる':'慌てる','いっせいに':'一斉に','ふだん':'普段',
+  'はち':'蜂','しかたない':'仕方ない','のどがかわく':'喉が渇く','はちみつ':'蜂蜜','こしょう':'胡椒',
+  'そば':'蕎麦','ふっとうする':'沸騰する','ふた':'蓋','ふるさと':'故郷','ふきん':'布巾','いちご':'苺',
+  'うなぎ':'鰻','つぶす':'潰す','やせる':'痩せる','せき':'咳','あきれる':'呆れる','あこがれる':'憧れる',
+  'おわび':'お詫び','わびる':'詫びる','かわいがる':'可愛がる','きたえる':'鍛える','ゆうべ':'夕べ',
+  'かゆい':'痒い','あせる':'焦る','にんじん':'人参','がんこな':'頑固な','きず':'傷','しわ':'皺',
+  'ゆでたまご':'茹で卵','うそ':'嘘','うそをつく':'嘘をつく',
+
+  // N4 常見
+  'すごい':'凄い','とまる':'泊まる','まつり':'祭り','ねつ':'熱','わかる':'分かる','こわれる':'壊れる',
+  'すし':'寿司','まちがい':'間違い','さがす':'探す','かける':'掛ける','かわ':'皮','むく':'剥く','まど':'窓',
+  'さす':'差す','さいふ':'財布','さとう':'砂糖','めんきょ':'免許','むすこ':'息子','ほうそう':'放送',
+  'おくれる':'遅れる','たしかめる':'確かめる','しゅうまつ':'週末','やくそく':'約束','けっこんしき':'結婚式',
+  'ごほうめい':'ご芳名','しょうたいする':'招待する','しょうたいじょう':'招待状','ふつう':'普通','くもり':'曇り',
+  'はれる':'晴れる','さんかく（△）':'三角（△）','さそう':'誘う','ほめる':'褒める','しょうかいする':'紹介する',
+  'かぜ':'風邪','かぜをひく':'風邪を引く','かならず':'必ず','じゅんび':'準備','おいわい':'お祝い','たばこ':'煙草',
+  'えさ':'餌','さしあげる':'差し上げる','ごみばこ':'ごみ箱','ふやす':'増やす','ねむい':'眠い','そうだんする':'相談する',
+  'やめる':'止める','せんたくき':'洗濯機','うけつけ':'受付','わたす':'渡す','ちこくする':'遅刻する',
+  'あいさつする':'挨拶する','きゅうりょう':'給料','うける':'受ける','まわり':'周り','かめ':'亀','かざる':'飾る',
+  'なっとう':'納豆','かみ':'髪','つる':'釣る','ゆしゅつする':'輸出する','こころ':'心','おちる':'落ちる',
+  'におい':'匂い','つく':'点く','われる':'割れる','ゆか':'床','ぬれる':'濡れる','おれる':'折れる',
+  'やぶれる':'破れる','がんばる':'頑張る','よごれ':'汚れ','かつ':'勝つ','つなぐ':'繋ぐ','けが':'怪我',
+  'ふえる':'増える','けんか':'喧嘩','なくす':'無くす','まよう':'迷う','いんかん':'印鑑','かべ':'壁',
+  'まじめ':'真面目','のこる':'残る','むり':'無理','ひっこす':'引っ越す','れんらくする':'連絡する',
+  'にる':'似る','てんきんする':'転勤する','くもる':'曇る','ちゅうしする':'中止する','かむ':'噛む','ひどい':'酷い',
+  'やく':'焼く','るす':'留守','はで':'派手','よごす':'汚す','どろぼう':'泥棒','こわす':'壊す','ふむ':'踏む',
+  'なく':'鳴く','のばす':'伸ばす','よごれる':'汚れる','ふく':'吹く','たおれる':'倒れる','ひさしぶり':'久しぶり',
+  'ふくざつ':'複雑','おどろく':'驚く','しかる':'叱る','ねっしん':'熱心','のど':'喉','まちがえる':'間違える',
+  'はじめ':'初め','わる':'割る','ぜったい':'絶対','のこす':'残す','かのじょ':'彼女','よろこぶ':'喜ぶ',
+  'はかる':'測る','けいざい':'経済','ちょきん':'貯金','ねだん':'値段','けんこう':'健康','きいろ':'黄色',
+  'ていねい':'丁寧','よこ':'横','じてんしゃおきば':'自転車置き場','おとす':'落とす','おつり':'お釣り',
+  'すべる':'滑る','ぶっか':'物価','うすい':'薄い','にがい':'苦い','かたい':'硬い','もえる':'燃える',
+  'じゅんばん':'順番','くわしい':'詳しい','けんさくする':'検索する','きぼう':'希望','てんぷする':'添付する',
+  'ゆうしょう':'優勝','すばらしい':'素晴らしい','みなさま':'皆様','いんたいする':'引退する','しあわせ':'幸せ',
+  'つごうがいい':'都合がいい','しょるい':'書類','えらぶ':'選ぶ','ゆめ':'夢','じこしょうかい':'自己紹介',
+  'さくねん':'昨年','えんりょする':'遠慮する','おくさま':'奥様','ほうもんする':'訪問する','つうやく':'通訳',
+  'ほんやく':'翻訳','きんしする':'禁止する','すぎる':'過ぎる','さわる':'触る','なれる':'慣れる',
+
+  // N2 / N1 常見
+  'にせもの':'偽物','あふれる':'溢れる','にぎわう':'賑わう','かばう':'庇う','すすめる':'勧める',
+  'もうける':'儲ける','ねんざ':'捻挫','おごる':'奢る','くるみ':'胡桃','おかゆ':'お粥','つかむ':'掴む',
+  'よそ':'余所','ほえる':'吠える','しつけ':'躾','もうけ':'儲け','わめく':'喚く','くわえる':'咥える',
+  'いっそう':'一層','うらやましい':'羨ましい','ささやく':'囁く','にらみつける':'睨み付ける',
+  'わずか':'僅か','たいそう':'大層','ほこり':'埃','たたえる':'称える','おごり':'奢り','なぐる':'殴る',
+  'あいまい':'曖昧','いたずら':'悪戯','くだらない':'下らない','もったいない':'勿体ない','ずさんな':'杜撰な',
+  'つぶれる':'潰れる','かゆみ':'痒み','こじれる':'拗れる','やけになる':'自棄になる','つぶやく':'呟く','とうてい':'到底'
+};
+function displayWord(x){
+  if(!x)return '';
+  // 同音但意思不同的項目，在這裡依中文義區分。
+  if(x.w==='きかい') return /機器|機械/.test(x.m||'')?'機械':'機会';
+  return commonKanjiMap[x.w] || x.w;
+}
+function displayReading(x){
+  if(!x)return '';
+  // 若主標題是由平假名補成漢字，原詞本身就是最完整、最可靠的讀音。
+  if(displayWord(x)!==x.w) return x.w;
+  return fullHiraganaReading(x);
+}
+
 function fullHiraganaReading(x){
   if(!x||!hasKanji(x.w))return '';
   const surface=String(x.w||'').replace(/＝/g,'');
@@ -311,8 +378,8 @@ function showCard(){
   }
   currentIndex=((currentIndex%arr.length)+arr.length)%arr.length;
   const x=arr[currentIndex]; revealed=false;
-  $('fcWord').textContent=x.w;
-  const fullReading=fullHiraganaReading(x);
+  $('fcWord').textContent=displayWord(x);
+  const fullReading=displayReading(x);
   $('fcReading').textContent=fullReading?`${fullReading}${x.level?` · ${x.level}`:''}`:(x.level||'');
   $('fcMeaning').textContent=x.m;
   $('fcMeaning').classList.add('hidden');$('fcHint').textContent='點一下翻卡';
@@ -349,8 +416,8 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
 $('addWordBtn').onclick=()=>{const w=$('wordInput').value.trim(),r=$('readingInput').value.trim(),m=$('meaningInput').value.trim(),e=$('exampleInput').value.trim();if(!w||!m)return alert('至少要填單字和中文意思');words.push({w,r,m,e,level:'自訂',source:'自訂',score:0,wrong:0,next:0,mastered:false});save();['wordInput','readingInput','meaningInput','exampleInput'].forEach(id=>$(id).value='');showCard();alert('已加入');}
 $('bulkBtn').onclick=()=>{const lines=$('bulkInput').value.split(/\n+/).map(x=>x.trim()).filter(Boolean);let n=0;lines.forEach(line=>{const [w,r,m,e='']=line.split(/[｜|]/).map(x=>x.trim());if(w&&m){words.push({w,r,m,e,level:'自訂',source:'自訂',score:0,wrong:0,next:0,mastered:false});n++;}});save();$('bulkInput').value='';showCard();alert(`已加入 ${n} 個單字`);}
 function renderList(){
-  const q=$('searchInput').value.trim().toLowerCase();const arr=words.filter(x=>(x.w+x.r+x.m).toLowerCase().includes(q));
-  $('wordList').innerHTML=arr.length?arr.map(x=>{const rd=fullHiraganaReading(x);return `<div class="item"><div class="main"><b>${esc(x.w)}</b>${rd?`<div class="item-reading">${esc(rd)}</div>`:''}<span>${esc(x.m)}${x.source?` · ${esc(x.source)} p.${x.page||''}`:''} · ${isMastered(x)?'✅ 已學會':'學習中'}</span></div><div style="display:flex;gap:6px"><button class="iconbtn" data-toggle="${words.indexOf(x)}">${isMastered(x)?'重新學習':'標記學會'}</button><button class="iconbtn" data-del="${words.indexOf(x)}">刪除</button></div></div>`}).join(''):'<div class="empty">沒有找到單字</div>';
+  const q=$('searchInput').value.trim().toLowerCase();const arr=words.filter(x=>(displayWord(x)+x.w+x.r+x.m).toLowerCase().includes(q));
+  $('wordList').innerHTML=arr.length?arr.map(x=>{const rd=displayReading(x);return `<div class="item"><div class="main"><b>${esc(displayWord(x))}</b>${rd?`<div class="item-reading">${esc(rd)}</div>`:''}<span>${esc(x.m)}${x.source?` · ${esc(x.source)} p.${x.page||''}`:''} · ${isMastered(x)?'✅ 已學會':'學習中'}</span></div><div style="display:flex;gap:6px"><button class="iconbtn" data-toggle="${words.indexOf(x)}">${isMastered(x)?'重新學習':'標記學會'}</button><button class="iconbtn" data-del="${words.indexOf(x)}">刪除</button></div></div>`}).join(''):'<div class="empty">沒有找到單字</div>';
   document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const x=words[+b.dataset.toggle];x.mastered=!x.mastered;if(x.mastered){x.score=Math.max(1,x.score||0);x.wrong=0;x.next=Date.now()+86400000;}else{x.score=0;x.next=0;}save();renderList();showCard();});
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{words.splice(+b.dataset.del,1);save();renderList();showCard();});
 }
@@ -378,8 +445,8 @@ function nextQuestion(){
   const pool=getQuizOptionPool(target).sort(()=>Math.random()-.5).slice(0,3);
   if(pool.length<3){$('quizWord').textContent='單字數不足';$('quizReading').textContent='';$('quizProgress').textContent='此範圍至少需要 4 個單字才能進行四選一測驗';$('choices').innerHTML='';return;}
   const opts=[target,...pool].sort(()=>Math.random()-.5);
-  $('quizWord').textContent=target.w;
-  $('quizReading').textContent=fullHiraganaReading(target);
+  $('quizWord').textContent=displayWord(target);
+  $('quizReading').textContent=displayReading(target);
   $('quizProgress').textContent=`${quizDeck==='all'?'全部':quizDeck} · 第 ${quizIndex+1} 題 · 尚未學會 ${targets.length} 個`;
   $('choices').innerHTML=opts.map(x=>`<button class="choice" data-correct="${x===target}">${esc(x.m)}</button>`).join('');
   document.querySelectorAll('.choice').forEach(c=>c.onclick=()=>{
